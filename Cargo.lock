@@ -4463,6 +4463,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "shank"
+version = "0.0.12"
+dependencies = [
+ "shank_macro 0.0.12",
+]
+
+[[package]]
 name = "shank_macro"
 version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4483,6 +4490,17 @@ dependencies = [
  "proc-macro2 1.0.56",
  "quote 1.0.26",
  "shank_macro_impl 0.0.11",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "shank_macro"
+version = "0.0.12"
+dependencies = [
+ "proc-macro2 1.0.56",
+ "quote 1.0.26",
+ "shank_macro_impl 0.0.12",
+ "shank_render",
  "syn 1.0.107",
 ]
 
@@ -4510,6 +4528,26 @@ dependencies = [
  "quote 1.0.26",
  "serde",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "shank_macro_impl"
+version = "0.0.12"
+dependencies = [
+ "anyhow",
+ "proc-macro2 1.0.56",
+ "quote 1.0.26",
+ "serde",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "shank_render"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2 1.0.56",
+ "quote 1.0.26",
+ "shank_macro_impl 0.0.12",
 ]
 
 [[package]]
@@ -6465,6 +6503,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "serial_test",
+ "shank 0.0.12",
  "solana-program",
  "solana-program-test",
  "solana-sdk",
