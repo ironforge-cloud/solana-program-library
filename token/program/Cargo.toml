@@ -20,6 +20,7 @@ num-traits = "0.2"
 num_enum = "0.6.1"
 solana-program = "1.14.12"
 thiserror = "1.0"
+shank = { path = "../../../../soldev/shank/shank" }
 
 [dev-dependencies]
 lazy_static = "1.4.0"

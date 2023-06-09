@@ -6449,6 +6449,7 @@ dependencies = [
  "num_enum 0.6.1",
  "proptest",
  "serial_test",
+ "shank 0.0.12",
  "solana-program",
  "solana-program-test",
  "solana-sdk",

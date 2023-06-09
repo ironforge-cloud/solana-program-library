@@ -3,6 +3,7 @@
 use crate::instruction::MAX_SIGNERS;
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use num_enum::TryFromPrimitive;
+use shank::{ShankAccount, ShankType};
 use solana_program::{
     program_error::ProgramError,
     program_option::COption,
@@ -12,7 +13,7 @@ use solana_program::{
 
 /// Mint data.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, ShankAccount)]
 pub struct Mint {
     /// Optional authority used to mint new tokens. The mint authority may only be provided during
     /// mint creation. If no mint authority is present then the mint has a fixed supply and no
@@ -82,7 +83,7 @@ impl Pack for Mint {
 
 /// Account data.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, ShankAccount)]
 pub struct Account {
     /// The mint associated with this account
     pub mint: Pubkey,
@@ -178,7 +179,7 @@ impl Pack for Account {
 
 /// Account state.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, TryFromPrimitive, ShankType)]
 pub enum AccountState {
     /// Account is not yet initialized
     Uninitialized,
@@ -198,7 +199,7 @@ impl Default for AccountState {
 
 /// Multisignature data.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, ShankAccount)]
 pub struct Multisig {
     /// Number of signers required
     pub m: u8,
@@ -206,8 +207,10 @@ pub struct Multisig {
     pub n: u8,
     /// Is `true` if this structure has been initialized
     pub is_initialized: bool,
+    // TODO(thlorenz): Shank does not support consts yet
+    // consider adding a `ShankConst` annotation
     /// Signer public keys
-    pub signers: [Pubkey; MAX_SIGNERS],
+    pub signers: [Pubkey; 11],
 }
 impl Sealed for Multisig {}
 impl IsInitialized for Multisig {
