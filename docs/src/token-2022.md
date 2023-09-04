@@ -6,7 +6,11 @@ A token program on the Solana blockchain, defining a common implementation for
 fungible and non-fungible tokens.
 
 The Token-2022 Program is a superset of the functionality provided by the
-[Token Program](token.mdx), deployed to all networks.
+[Token Program](token.mdx).
+
+The program is still under audit and not meant for full production use. In the
+meantime, all clusters have the latest program deployed **for testing and development
+purposes ONLY**.
 
 | Information | Account Address |
 | --- | --- |
@@ -90,12 +94,17 @@ Mint extensions currently include:
 * closing mint
 * interest-bearing tokens
 * non-transferable tokens
+* permanent delegate
+* transfer hook
+* metadata pointer
+* metadata
 
 Account extensions currently include:
 
 * memo required on incoming transfers
 * immutable ownership
 * default account state
+* CPI guard
 
 Extensions can be mixed and matched, which means it's possible to create a mint
 with only transfer fees, only interest-bearing tokens, both, or neither!
@@ -114,6 +123,7 @@ To get started with Token-2022:
 - [Extension Guide](token-2022/extensions.mdx)
 - [Wallet Guide](token-2022/wallet.md)
 - [On-Chain Program Guide](token-2022/onchain.md)
+- [Presentation about Token-2022](token-2022/presentation.md)
 
 For existing functionality in the Token Program, see the [token docs](token.mdx).
 The Token functionality will always apply to Token-2022.

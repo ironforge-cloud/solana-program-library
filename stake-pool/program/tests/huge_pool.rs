@@ -25,7 +25,7 @@ use {
 // the test require so many helper accounts.
 // 20k is also a very safe number for the current upper bound of the network.
 const MAX_POOL_SIZE_WITH_REQUESTED_COMPUTE_UNITS: u32 = 20_000;
-const MAX_POOL_SIZE: u32 = 3_000;
+const MAX_POOL_SIZE: u32 = 2_650;
 const STAKE_AMOUNT: u64 = 200_000_000_000;
 
 async fn setup(
@@ -107,7 +107,7 @@ async fn setup(
 
     let mut context = program_test.start_with_context().await;
     let epoch_schedule = context.genesis_config().epoch_schedule;
-    let slot = epoch_schedule.first_normal_slot + epoch_schedule.slots_per_epoch;
+    let slot = epoch_schedule.first_normal_slot + epoch_schedule.slots_per_epoch + 1;
     context.warp_to_slot(slot).unwrap();
 
     let vote_pubkey = vote_account_pubkeys[max_validators as usize - 1];
@@ -300,26 +300,26 @@ async fn remove_validator_from_pool(max_validators: u32) {
     let first_element = &validator_list.validators[0];
     assert_eq!(first_element.status, StakeStatus::DeactivatingValidator);
     assert_eq!(
-        first_element.active_stake_lamports,
+        u64::from(first_element.active_stake_lamports),
         LAMPORTS_PER_SOL + STAKE_ACCOUNT_RENT_EXEMPTION
     );
-    assert_eq!(first_element.transient_stake_lamports, 0);
+    assert_eq!(u64::from(first_element.transient_stake_lamports), 0);
 
     let middle_element = &validator_list.validators[middle_index];
     assert_eq!(middle_element.status, StakeStatus::DeactivatingValidator);
     assert_eq!(
-        middle_element.active_stake_lamports,
+        u64::from(middle_element.active_stake_lamports),
         LAMPORTS_PER_SOL + STAKE_ACCOUNT_RENT_EXEMPTION
     );
-    assert_eq!(middle_element.transient_stake_lamports, 0);
+    assert_eq!(u64::from(middle_element.transient_stake_lamports), 0);
 
     let last_element = &validator_list.validators[last_index];
     assert_eq!(last_element.status, StakeStatus::DeactivatingValidator);
     assert_eq!(
-        last_element.active_stake_lamports,
+        u64::from(last_element.active_stake_lamports),
         LAMPORTS_PER_SOL + STAKE_ACCOUNT_RENT_EXEMPTION
     );
-    assert_eq!(last_element.transient_stake_lamports, 0);
+    assert_eq!(u64::from(last_element.transient_stake_lamports), 0);
 
     let error = stake_pool_accounts
         .update_validator_list_balance(
@@ -467,10 +467,10 @@ async fn add_validator_to_pool(max_validators: u32) {
     let last_element = validator_list.validators[last_index];
     assert_eq!(last_element.status, StakeStatus::Active);
     assert_eq!(
-        last_element.active_stake_lamports,
+        u64::from(last_element.active_stake_lamports),
         LAMPORTS_PER_SOL + STAKE_ACCOUNT_RENT_EXEMPTION
     );
-    assert_eq!(last_element.transient_stake_lamports, 0);
+    assert_eq!(u64::from(last_element.transient_stake_lamports), 0);
     assert_eq!(last_element.vote_account_address, test_vote_address);
 
     let transient_stake_seed = u64::MAX;
@@ -505,11 +505,11 @@ async fn add_validator_to_pool(max_validators: u32) {
     let last_element = validator_list.validators[last_index];
     assert_eq!(last_element.status, StakeStatus::Active);
     assert_eq!(
-        last_element.active_stake_lamports,
+        u64::from(last_element.active_stake_lamports),
         LAMPORTS_PER_SOL + STAKE_ACCOUNT_RENT_EXEMPTION
     );
     assert_eq!(
-        last_element.transient_stake_lamports,
+        u64::from(last_element.transient_stake_lamports),
         increase_amount + STAKE_ACCOUNT_RENT_EXEMPTION
     );
     assert_eq!(last_element.vote_account_address, test_vote_address);
@@ -635,7 +635,7 @@ async fn withdraw(max_validators: u32) {
             &pool_account_pubkey,
             &stake_address,
             &user.pubkey(),
-            STAKE_AMOUNT,
+            TEST_STAKE_AMOUNT,
         )
         .await;
     assert!(error.is_none(), "{:?}", error);

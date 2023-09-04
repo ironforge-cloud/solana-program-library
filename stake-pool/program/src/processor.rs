@@ -4,6 +4,12 @@ use {
     crate::{
         error::StakePoolError,
         find_deposit_authority_program_address,
+        inline_mpl_token_metadata::{
+            self,
+            instruction::{create_metadata_accounts_v3, update_metadata_accounts_v2},
+            pda::find_metadata_account,
+            state::DataV2,
+        },
         instruction::{FundingType, PreferredValidatorType, StakePoolInstruction},
         minimum_delegation, minimum_reserve_lamports, minimum_stake_lamports,
         state::{
@@ -15,11 +21,6 @@ use {
         TRANSIENT_STAKE_SEED_PREFIX,
     },
     borsh::BorshDeserialize,
-    mpl_token_metadata::{
-        instruction::{create_metadata_accounts_v3, update_metadata_accounts_v2},
-        pda::find_metadata_account,
-        state::DataV2,
-    },
     num_traits::FromPrimitive,
     solana_program::{
         account_info::{next_account_info, AccountInfo},
@@ -38,6 +39,7 @@ use {
     spl_token_2022::{
         check_spl_token_program_account,
         extension::{BaseStateWithExtensions, StateWithExtensions},
+        native_mint,
         state::Mint,
     },
     std::num::NonZeroU32,
@@ -161,10 +163,10 @@ fn check_stake_program(program_id: &Pubkey) -> Result<(), ProgramError> {
 
 /// Check mpl metadata program
 fn check_mpl_metadata_program(program_id: &Pubkey) -> Result<(), ProgramError> {
-    if *program_id != mpl_token_metadata::id() {
+    if *program_id != inline_mpl_token_metadata::id() {
         msg!(
             "Expected mpl metadata program {}, received {}",
-            mpl_token_metadata::id(),
+            inline_mpl_token_metadata::id(),
             program_id
         );
         Err(ProgramError::IncorrectProgramId)
@@ -336,8 +338,8 @@ fn check_transient_stake_account(
 }
 
 /// Create a stake account on a PDA without transferring lamports
-fn create_stake_account<'a>(
-    stake_account_info: AccountInfo<'a>,
+fn create_stake_account(
+    stake_account_info: AccountInfo<'_>,
     stake_account_signer_seeds: &[&[u8]],
     stake_space: usize,
 ) -> Result<(), ProgramError> {
@@ -737,6 +739,8 @@ impl Processor {
             return Err(StakePoolError::AlreadyInUse.into());
         }
 
+        // This check is unnecessary since the runtime will check the ownership,
+        // but provides clarity that the parameter is in fact checked.
         check_account_owner(stake_pool_info, program_id)?;
         let mut stake_pool = try_from_slice_unchecked::<StakePool>(&stake_pool_info.data.borrow())?;
         if !stake_pool.is_uninitialized() {
@@ -744,6 +748,8 @@ impl Processor {
             return Err(StakePoolError::AlreadyInUse.into());
         }
 
+        // This check is unnecessary since the runtime will check the ownership,
+        // but provides clarity that the parameter is in fact checked.
         check_account_owner(validator_list_info, program_id)?;
         let mut validator_list =
             try_from_slice_unchecked::<ValidatorList>(&validator_list_info.data.borrow())?;
@@ -825,6 +831,10 @@ impl Processor {
 
             if pool_mint.base.supply != 0 {
                 return Err(StakePoolError::NonZeroPoolTokenSupply.into());
+            }
+
+            if pool_mint.base.decimals != native_mint::DECIMALS {
+                return Err(StakePoolError::IncorrectMintDecimals.into());
             }
 
             if !pool_mint
@@ -1077,12 +1087,12 @@ impl Processor {
         validator_list.push(ValidatorStakeInfo {
             status: StakeStatus::Active,
             vote_account_address: *validator_vote_info.key,
-            active_stake_lamports: required_lamports,
-            transient_stake_lamports: 0,
-            last_update_epoch: clock.epoch,
-            transient_seed_suffix: 0,
-            unused: 0,
-            validator_seed_suffix: raw_validator_seed,
+            active_stake_lamports: required_lamports.into(),
+            transient_stake_lamports: 0.into(),
+            last_update_epoch: clock.epoch.into(),
+            transient_seed_suffix: 0.into(),
+            unused: 0.into(),
+            validator_seed_suffix: raw_validator_seed.into(),
         })?;
 
         Ok(())
@@ -1157,7 +1167,7 @@ impl Processor {
             stake_pool_info.key,
             stake_account_info.key,
             &vote_account_address,
-            NonZeroU32::new(validator_stake_info.validator_seed_suffix),
+            NonZeroU32::new(validator_stake_info.validator_seed_suffix.into()),
         )?;
 
         if validator_stake_info.status != StakeStatus::Active {
@@ -1165,13 +1175,13 @@ impl Processor {
             return Err(StakePoolError::ValidatorNotFound.into());
         }
 
-        let new_status = if validator_stake_info.transient_stake_lamports > 0 {
+        let new_status = if u64::from(validator_stake_info.transient_stake_lamports) > 0 {
             check_transient_stake_address(
                 program_id,
                 stake_pool_info.key,
                 transient_stake_account_info.key,
                 &vote_account_address,
-                validator_stake_info.transient_seed_suffix,
+                validator_stake_info.transient_seed_suffix.into(),
             )?;
 
             match get_stake_state(transient_stake_account_info) {
@@ -1307,17 +1317,17 @@ impl Processor {
             stake_pool_info.key,
             validator_stake_account_info.key,
             &vote_account_address,
-            NonZeroU32::new(validator_stake_info.validator_seed_suffix),
+            NonZeroU32::new(validator_stake_info.validator_seed_suffix.into()),
         )?;
-        if validator_stake_info.transient_stake_lamports > 0 {
+        if u64::from(validator_stake_info.transient_stake_lamports) > 0 {
             if maybe_ephemeral_stake_seed.is_none() {
                 msg!("Attempting to decrease stake on a validator with pending transient stake, use DecreaseAdditionalValidatorStake with the existing seed");
                 return Err(StakePoolError::TransientAccountInUse.into());
             }
-            if transient_stake_seed != validator_stake_info.transient_seed_suffix {
+            if transient_stake_seed != u64::from(validator_stake_info.transient_seed_suffix) {
                 msg!(
                     "Transient stake already exists with seed {}, you must use that one",
-                    validator_stake_info.transient_seed_suffix
+                    u64::from(validator_stake_info.transient_seed_suffix)
                 );
                 return Err(ProgramError::InvalidSeeds);
             }
@@ -1413,7 +1423,7 @@ impl Processor {
             transient_stake_seed,
         )?;
 
-        if validator_stake_info.transient_stake_lamports > 0 {
+        if u64::from(validator_stake_info.transient_stake_lamports) > 0 {
             let stake_history_info = maybe_stake_history_info.unwrap();
             // transient stake exists, try to merge from the source account,
             // which is always an ephemeral account
@@ -1467,15 +1477,17 @@ impl Processor {
             }
         }
 
-        validator_stake_info.active_stake_lamports = validator_stake_info
-            .active_stake_lamports
-            .checked_sub(lamports)
-            .ok_or(StakePoolError::CalculationFailure)?;
-        validator_stake_info.transient_stake_lamports = validator_stake_info
-            .transient_stake_lamports
-            .checked_add(lamports)
-            .ok_or(StakePoolError::CalculationFailure)?;
-        validator_stake_info.transient_seed_suffix = transient_stake_seed;
+        validator_stake_info.active_stake_lamports =
+            u64::from(validator_stake_info.active_stake_lamports)
+                .checked_sub(lamports)
+                .ok_or(StakePoolError::CalculationFailure)?
+                .into();
+        validator_stake_info.transient_stake_lamports =
+            u64::from(validator_stake_info.transient_stake_lamports)
+                .checked_add(lamports)
+                .ok_or(StakePoolError::CalculationFailure)?
+                .into();
+        validator_stake_info.transient_seed_suffix = transient_stake_seed.into();
 
         Ok(())
     }
@@ -1561,15 +1573,15 @@ impl Processor {
             return Err(StakePoolError::ValidatorNotFound.into());
         }
         let mut validator_stake_info = maybe_validator_stake_info.unwrap();
-        if validator_stake_info.transient_stake_lamports > 0 {
+        if u64::from(validator_stake_info.transient_stake_lamports) > 0 {
             if maybe_ephemeral_stake_seed.is_none() {
                 msg!("Attempting to increase stake on a validator with pending transient stake, use IncreaseAdditionalValidatorStake with the existing seed");
                 return Err(StakePoolError::TransientAccountInUse.into());
             }
-            if transient_stake_seed != validator_stake_info.transient_seed_suffix {
+            if transient_stake_seed != u64::from(validator_stake_info.transient_seed_suffix) {
                 msg!(
                     "Transient stake already exists with seed {}, you must use that one",
-                    validator_stake_info.transient_seed_suffix
+                    u64::from(validator_stake_info.transient_seed_suffix)
                 );
                 return Err(ProgramError::InvalidSeeds);
             }
@@ -1586,7 +1598,7 @@ impl Processor {
             stake_pool_info.key,
             withdraw_authority_info.key,
             vote_account_address,
-            validator_stake_info.validator_seed_suffix,
+            validator_stake_info.validator_seed_suffix.into(),
             &stake_pool.lockup,
         )?;
 
@@ -1618,13 +1630,13 @@ impl Processor {
         if reserve_stake_account_info
             .lamports()
             .saturating_sub(total_lamports)
-            <= stake_rent
+            < stake_rent
         {
             let max_split_amount = reserve_stake_account_info
                 .lamports()
                 .saturating_sub(stake_rent.saturating_mul(2));
             msg!(
-                "Reserve stake does not have enough lamports for increase, must be less than {}, {} requested",
+                "Reserve stake does not have enough lamports for increase, maximum amount {}, {} requested",
                 max_split_amount,
                 lamports
             );
@@ -1691,7 +1703,7 @@ impl Processor {
             transient_stake_seed,
         )?;
 
-        if validator_stake_info.transient_stake_lamports > 0 {
+        if u64::from(validator_stake_info.transient_stake_lamports) > 0 {
             // transient stake exists, try to merge from the source account,
             // which is always an ephemeral account
             Self::stake_merge(
@@ -1756,11 +1768,12 @@ impl Processor {
             }
         }
 
-        validator_stake_info.transient_stake_lamports = validator_stake_info
-            .transient_stake_lamports
-            .checked_add(total_lamports)
-            .ok_or(StakePoolError::CalculationFailure)?;
-        validator_stake_info.transient_seed_suffix = transient_stake_seed;
+        validator_stake_info.transient_stake_lamports =
+            u64::from(validator_stake_info.transient_stake_lamports)
+                .checked_add(total_lamports)
+                .ok_or(StakePoolError::CalculationFailure)?
+                .into();
+        validator_stake_info.transient_seed_suffix = transient_stake_seed.into();
 
         Ok(())
     }
@@ -1890,21 +1903,22 @@ impl Processor {
                 stake_pool_info.key,
                 source_validator_stake_account_info.key,
                 &vote_account_address,
-                NonZeroU32::new(validator_stake_info.validator_seed_suffix),
+                NonZeroU32::new(validator_stake_info.validator_seed_suffix.into()),
             )?;
-            if validator_stake_info.transient_stake_lamports > 0 {
+            if u64::from(validator_stake_info.transient_stake_lamports) > 0 {
                 return Err(StakePoolError::TransientAccountInUse.into());
             }
             if validator_stake_info.status != StakeStatus::Active {
                 msg!("Validator is marked for removal and no longer allows redelegation");
                 return Err(StakePoolError::ValidatorNotFound.into());
             }
-            validator_stake_info.active_stake_lamports = validator_stake_info
-                .active_stake_lamports
-                .checked_sub(lamports)
-                .ok_or(StakePoolError::CalculationFailure)?;
-            validator_stake_info.transient_stake_lamports = stake_rent;
-            validator_stake_info.transient_seed_suffix = source_transient_stake_seed;
+            validator_stake_info.active_stake_lamports =
+                u64::from(validator_stake_info.active_stake_lamports)
+                    .checked_sub(lamports)
+                    .ok_or(StakePoolError::CalculationFailure)?
+                    .into();
+            validator_stake_info.transient_stake_lamports = stake_rent.into();
+            validator_stake_info.transient_seed_suffix = source_transient_stake_seed.into();
         }
 
         // split from source, into source transient
@@ -1994,7 +2008,7 @@ impl Processor {
                 stake_pool_info.key,
                 withdraw_authority_info.key,
                 vote_account_address,
-                validator_stake_info.validator_seed_suffix,
+                validator_stake_info.validator_seed_suffix.into(),
                 &stake_pool.lockup,
             )?;
             if validator_stake_info.status != StakeStatus::Active {
@@ -2003,19 +2017,23 @@ impl Processor {
                 );
                 return Err(StakePoolError::ValidatorNotFound.into());
             }
-            let transient_account_exists = validator_stake_info.transient_stake_lamports > 0;
-            validator_stake_info.transient_stake_lamports = validator_stake_info
-                .transient_stake_lamports
-                .checked_add(destination_transient_lamports)
-                .ok_or(StakePoolError::CalculationFailure)?;
+            let transient_account_exists =
+                u64::from(validator_stake_info.transient_stake_lamports) > 0;
+            validator_stake_info.transient_stake_lamports =
+                u64::from(validator_stake_info.transient_stake_lamports)
+                    .checked_add(destination_transient_lamports)
+                    .ok_or(StakePoolError::CalculationFailure)?
+                    .into();
 
             if transient_account_exists {
                 // if transient stake exists, make sure it's the right one and that it's
                 // usable by the pool
-                if validator_stake_info.transient_seed_suffix != destination_transient_stake_seed {
+                if u64::from(validator_stake_info.transient_seed_suffix)
+                    != destination_transient_stake_seed
+                {
                     msg!("Provided seed {} does not match current seed {} for transient stake account",
                         destination_transient_stake_seed,
-                        validator_stake_info.transient_seed_suffix
+                        u64::from(validator_stake_info.transient_seed_suffix)
                     );
                     return Err(StakePoolError::InvalidStakeAccountAddress.into());
                 }
@@ -2073,7 +2091,8 @@ impl Processor {
                     destination_transient_lamports,
                     destination_transient_stake_account_info.clone(),
                 )?;
-                validator_stake_info.transient_seed_suffix = destination_transient_stake_seed;
+                validator_stake_info.transient_seed_suffix =
+                    destination_transient_stake_seed.into();
             }
         }
 
@@ -2214,7 +2233,7 @@ impl Processor {
                 stake_pool_info.key,
                 validator_stake_info.key,
                 &validator_stake_record.vote_account_address,
-                NonZeroU32::new(validator_stake_record.validator_seed_suffix),
+                NonZeroU32::new(validator_stake_record.validator_seed_suffix.into()),
             )
             .is_err()
             {
@@ -2225,7 +2244,7 @@ impl Processor {
                 stake_pool_info.key,
                 transient_stake_info.key,
                 &validator_stake_record.vote_account_address,
-                validator_stake_record.transient_seed_suffix,
+                validator_stake_record.transient_seed_suffix.into(),
             )
             .is_err()
             {
@@ -2426,9 +2445,9 @@ impl Processor {
                 }
             }
 
-            validator_stake_record.last_update_epoch = clock.epoch;
-            validator_stake_record.active_stake_lamports = active_stake_lamports;
-            validator_stake_record.transient_stake_lamports = transient_stake_lamports;
+            validator_stake_record.last_update_epoch = clock.epoch.into();
+            validator_stake_record.active_stake_lamports = active_stake_lamports.into();
+            validator_stake_record.transient_stake_lamports = transient_stake_lamports.into();
         }
 
         Ok(())
@@ -2493,7 +2512,7 @@ impl Processor {
             return Err(StakePoolError::WrongStakeState.into());
         };
         for validator_stake_record in validator_list.iter::<ValidatorStakeInfo>() {
-            if validator_stake_record.last_update_epoch < clock.epoch {
+            if u64::from(validator_stake_record.last_update_epoch) < clock.epoch {
                 return Err(StakePoolError::StakeListOutOfDate.into());
             }
             total_lamports = total_lamports
@@ -2581,7 +2600,7 @@ impl Processor {
             return Err(StakePoolError::InvalidState.into());
         }
 
-        validator_list.retain::<ValidatorStakeInfo>(ValidatorStakeInfo::is_not_removed)?;
+        validator_list.retain::<ValidatorStakeInfo, _>(ValidatorStakeInfo::is_not_removed)?;
 
         Ok(())
     }
@@ -2676,7 +2695,7 @@ impl Processor {
             stake_pool_info.key,
             validator_stake_account_info.key,
             &vote_account_address,
-            NonZeroU32::new(validator_stake_info.validator_seed_suffix),
+            NonZeroU32::new(validator_stake_info.validator_seed_suffix.into()),
         )?;
 
         if validator_stake_info.status != StakeStatus::Active {
@@ -2846,7 +2865,7 @@ impl Processor {
             .ok_or(StakePoolError::CalculationFailure)?;
         borsh::to_writer(&mut stake_pool_info.data.borrow_mut()[..], &stake_pool)?;
 
-        validator_stake_info.active_stake_lamports = validator_stake_account_info.lamports();
+        validator_stake_info.active_stake_lamports = validator_stake_account_info.lamports().into();
 
         Ok(())
     }
@@ -3142,11 +3161,10 @@ impl Processor {
                         ValidatorStakeInfo::memcmp_pubkey(x, &preferred_withdraw_validator)
                     })
                     .ok_or(StakePoolError::ValidatorNotFound)?;
-                let available_lamports = preferred_validator_info
-                    .active_stake_lamports
+                let available_lamports = u64::from(preferred_validator_info.active_stake_lamports)
                     .saturating_sub(minimum_lamports_with_tolerance);
                 if preferred_withdraw_validator != vote_account_address && available_lamports > 0 {
-                    msg!("Validator vote address {} is preferred for withdrawals, it currently has {} lamports available. Please withdraw those before using other validator stake accounts.", preferred_withdraw_validator, preferred_validator_info.active_stake_lamports);
+                    msg!("Validator vote address {} is preferred for withdrawals, it currently has {} lamports available. Please withdraw those before using other validator stake accounts.", preferred_withdraw_validator, u64::from(preferred_validator_info.active_stake_lamports));
                     return Err(StakePoolError::IncorrectWithdrawVoteAddress.into());
                 }
             }
@@ -3165,7 +3183,7 @@ impl Processor {
                     stake_pool_info.key,
                     stake_split_from.key,
                     &vote_account_address,
-                    NonZeroU32::new(validator_stake_info.validator_seed_suffix),
+                    NonZeroU32::new(validator_stake_info.validator_seed_suffix.into()),
                 )?;
                 StakeWithdrawSource::Active
             } else if has_transient_stake {
@@ -3175,7 +3193,7 @@ impl Processor {
                     stake_pool_info.key,
                     stake_split_from.key,
                     &vote_account_address,
-                    validator_stake_info.transient_seed_suffix,
+                    validator_stake_info.transient_seed_suffix.into(),
                 )?;
                 StakeWithdrawSource::Transient
             } else {
@@ -3185,7 +3203,7 @@ impl Processor {
                     stake_pool_info.key,
                     stake_split_from.key,
                     &vote_account_address,
-                    NonZeroU32::new(validator_stake_info.validator_seed_suffix),
+                    NonZeroU32::new(validator_stake_info.validator_seed_suffix.into()),
                 )?;
                 StakeWithdrawSource::ValidatorRemoval
             };
@@ -3279,25 +3297,28 @@ impl Processor {
         if let Some((validator_list_item, withdraw_source)) = validator_list_item_info {
             match withdraw_source {
                 StakeWithdrawSource::Active => {
-                    validator_list_item.active_stake_lamports = validator_list_item
-                        .active_stake_lamports
-                        .checked_sub(withdraw_lamports)
-                        .ok_or(StakePoolError::CalculationFailure)?
+                    validator_list_item.active_stake_lamports =
+                        u64::from(validator_list_item.active_stake_lamports)
+                            .checked_sub(withdraw_lamports)
+                            .ok_or(StakePoolError::CalculationFailure)?
+                            .into()
                 }
                 StakeWithdrawSource::Transient => {
-                    validator_list_item.transient_stake_lamports = validator_list_item
-                        .transient_stake_lamports
-                        .checked_sub(withdraw_lamports)
-                        .ok_or(StakePoolError::CalculationFailure)?
+                    validator_list_item.transient_stake_lamports =
+                        u64::from(validator_list_item.transient_stake_lamports)
+                            .checked_sub(withdraw_lamports)
+                            .ok_or(StakePoolError::CalculationFailure)?
+                            .into()
                 }
                 StakeWithdrawSource::ValidatorRemoval => {
-                    validator_list_item.active_stake_lamports = validator_list_item
-                        .active_stake_lamports
-                        .checked_sub(withdraw_lamports)
-                        .ok_or(StakePoolError::CalculationFailure)?;
-                    if validator_list_item.active_stake_lamports != 0 {
+                    validator_list_item.active_stake_lamports =
+                        u64::from(validator_list_item.active_stake_lamports)
+                            .checked_sub(withdraw_lamports)
+                            .ok_or(StakePoolError::CalculationFailure)?
+                            .into();
+                    if u64::from(validator_list_item.active_stake_lamports) != 0 {
                         msg!("Attempting to remove a validator from the pool, but withdrawal leaves {} lamports, update the pool to merge any unaccounted lamports",
-                            validator_list_item.active_stake_lamports);
+                            u64::from(validator_list_item.active_stake_lamports));
                         return Err(StakePoolError::StakeListAndPoolOutOfDate.into());
                     }
                     // since we already checked that there's no transient stake,
@@ -3512,13 +3533,6 @@ impl Processor {
             name,
             symbol,
             uri,
-            None,
-            0,
-            true,
-            true,
-            None,
-            None,
-            None,
         );
 
         let (_, stake_withdraw_bump_seed) =
@@ -4001,6 +4015,7 @@ impl PrintProgramError for StakePoolError {
             StakePoolError::UnsupportedMintExtension => msg!("Error: mint has an unsupported extension"),
             StakePoolError::UnsupportedFeeAccountExtension => msg!("Error: fee account has an unsupported extension"),
             StakePoolError::ExceededSlippage => msg!("Error: instruction exceeds desired slippage limit"),
+            StakePoolError::IncorrectMintDecimals => msg!("Error: Provided mint does not have 9 decimals to match SOL"),
         }
     }
 }

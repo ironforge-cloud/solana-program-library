@@ -2,10 +2,13 @@ use {
     crate::{
         error::TokenError,
         extension::{Extension, ExtensionType},
-        pod::*,
     },
     bytemuck::{Pod, Zeroable},
     solana_program::{clock::Epoch, entrypoint::ProgramResult},
+    spl_pod::{
+        optional_keys::OptionalNonZeroPubkey,
+        primitives::{PodU16, PodU64},
+    },
     std::{
         cmp,
         convert::{TryFrom, TryInto},
@@ -173,13 +176,13 @@ pub(crate) mod test {
 
     pub(crate) fn test_transfer_fee_config() -> TransferFeeConfig {
         TransferFeeConfig {
-            transfer_fee_config_authority: OptionalNonZeroPubkey::try_from(Some(Pubkey::new(
-                &[10; 32],
-            )))
+            transfer_fee_config_authority: OptionalNonZeroPubkey::try_from(Some(
+                Pubkey::new_from_array([10; 32]),
+            ))
             .unwrap(),
-            withdraw_withheld_authority: OptionalNonZeroPubkey::try_from(Some(Pubkey::new(
-                &[11; 32],
-            )))
+            withdraw_withheld_authority: OptionalNonZeroPubkey::try_from(Some(
+                Pubkey::new_from_array([11; 32]),
+            ))
             .unwrap(),
             withheld_amount: PodU64::from(u64::MAX),
             older_transfer_fee: TransferFee {

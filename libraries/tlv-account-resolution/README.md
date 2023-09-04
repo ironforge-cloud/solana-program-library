@@ -11,45 +11,67 @@ into a TLV entry in an account, you can do the following:
 ```rust
 use {
     solana_program::{account_info::AccountInfo, instruction::{AccountMeta, Instruction}, pubkey::Pubkey},
-    spl_type_length_value::discriminator::{Discriminator, TlvDiscriminator},
-    spl_tlv_account_resolution::state::ExtraAccountMetas,
+    spl_discriminator::{ArrayDiscriminator, SplDiscriminate},
+    spl_tlv_account_resolution::{
+        account::ExtraAccountMeta,
+        seeds::Seed,
+        state::ExtraAccountMetaList
+    },
 };
 
 struct MyInstruction;
-impl TlvDiscriminator for MyInstruction {
+impl SplDiscriminate for MyInstruction {
     // For ease of use, give it the same discriminator as its instruction definition
-    const TLV_DISCRIMINATOR: Discriminator = Discriminator::new([1; Discriminator::LENGTH]);
+    const SPL_DISCRIMINATOR: ArrayDiscriminator = ArrayDiscriminator::new([1; ArrayDiscriminator::LENGTH]);
 }
 
-// Actually put it in the additional required account keys and signer / writable
+// Prepare the additional required account keys and signer / writable
 let extra_metas = [
-    AccountMeta::new(Pubkey::new_unique(), false),
-    AccountMeta::new(Pubkey::new_unique(), true),
-    AccountMeta::new_readonly(Pubkey::new_unique(), true),
-    AccountMeta::new_readonly(Pubkey::new_unique(), false),
+    AccountMeta::new(Pubkey::new_unique(), false).into(),
+    AccountMeta::new_readonly(Pubkey::new_unique(), true).into(),
+    ExtraAccountMeta::new_with_seeds(
+        &[
+            Seed::Literal {
+                bytes: b"some_string".to_vec(),
+            },
+            Seed::InstructionData {
+                index: 1,
+                length: 1, // u8
+            },
+            Seed::AccountKey { index: 1 },
+        ],
+        false,
+        true,
+    ).unwrap(),
+    ExtraAccountMeta::new_external_pda_with_seeds(
+        0,
+        &[Seed::AccountKey { index: 2 }],
+        false,
+        false,
+    ).unwrap(),
 ];
 
-// Assume that this buffer is actually account data, already allocated to `account_size`
-let account_size = ExtraAccountMetas::size_of(extra_metas.len()).unwrap();
+// Allocate a new buffer with the proper `account_size`
+let account_size = ExtraAccountMetaList::size_of(extra_metas.len()).unwrap();
 let mut buffer = vec![0; account_size];
 
 // Initialize the structure for your instruction
-ExtraAccountMetas::init_with_account_metas::<MyInstruction>(&mut buffer, &extra_metas).unwrap();
+ExtraAccountMetaList::init::<MyInstruction>(&mut buffer, &extra_metas).unwrap();
 
 // Off-chain, you can add the additional accounts directly from the account data
 let program_id = Pubkey::new_unique();
-let mut instruction = Instruction::new_with_bytes(program_id, &[], vec![]);
-ExtraAccountMetas::add_to_instruction::<MyInstruction>(&mut instruction, &buffer).unwrap();
+let mut instruction = Instruction::new_with_bytes(program_id, &[0, 1, 2], vec![]);
+ExtraAccountMetaList::add_to_instruction::<MyInstruction>(&mut instruction, &buffer).unwrap();
 
 // On-chain, you can add the additional accounts *and* account infos
-let mut cpi_instruction = Instruction::new_with_bytes(program_id, &[], vec![]);
+let mut cpi_instruction = Instruction::new_with_bytes(program_id, &[0, 1, 2], vec![]);
 
 // Include all of the well-known required account infos here first
 let mut cpi_account_infos = vec![]; 
 
 // Provide all "remaining_account_infos" that are *not* part of any other known interface
 let remaining_account_infos = &[]; 
-ExtraAccountMetas::add_to_cpi_instruction::<MyInstruction>(
+ExtraAccountMetaList::add_to_cpi_instruction::<MyInstruction>(
     &mut cpi_instruction,
     &mut cpi_account_infos,
     &buffer,
@@ -57,7 +79,7 @@ ExtraAccountMetas::add_to_cpi_instruction::<MyInstruction>(
 ).unwrap();
 ```
 
-For ease of use on-chain, `ExtraAccountMetas::init_with_account_infos` is also
+For ease of use on-chain, `ExtraAccountMetaList::init` is also
 provided to initialize directly from a set of given accounts.
 
 ## Motivation
@@ -83,7 +105,7 @@ uses static account data.
 
 For example, let's imagine there's a `Transferable` interface, along with a
 `transfer` instruction. Some programs that implement `transfer` may need more
-accounts than just the ones defined in the interface. How does a an on-chain or
+accounts than just the ones defined in the interface. How does an on-chain or
 off-chain client figure out the additional required accounts?
 
 The "static" approach requires programs to write the extra required accounts to
@@ -99,18 +121,41 @@ instruction and give the correct account infos.
 
 This approach could also be called a "state interface".
 
-## How it works
+### Types of Required Accounts
+
+This library is capable of storing two types of configurations for additional
+required accounts:
+
+- Accounts with a fixed address
+- Accounts with a **dynamic program-derived address** derived from seeds that
+may come from any combination of the following:
+  - Hard-coded values, such as string literals or integers
+  - A slice of the instruction data provided to the transfer-hook program
+  - The address of another account in the total list of accounts
+  - A program id from another account in the instruction
+
+When you store configurations for a dynamic Program-Derived Address within the
+additional required accounts, the PDA itself is evaluated (or resolved) at the
+time of instruction invocation using the instruction itself. This
+occurs in the offchain and onchain helpers mentioned below, which leverage
+the SPL TLV Account Resolution library to perform this resolution
+automatically.
+
+## How it Works
 
 This library uses `spl-type-length-value` to read and write required instruction
 accounts from account data.
 
 Interface instructions must have an 8-byte discriminator, so that the exposed
-`ExtraAccountMetas` type can use the instruction discriminator as a `TlvDiscriminator`.
+`ExtraAccountMetaList` type can use the instruction discriminator as an
+`ArrayDiscriminator`, which allows that discriminator to serve as a unique TLV
+discriminator for identifying entries that correspond to that particular
+instruction.
 
-This can be confusing. Typically, a type implements `TlvDiscriminator`, so that
-the type can be written into TLV data. In this case, `ExtraAccountMetas` is
-generic over `TlvDiscriminator`, meaning that a program can write many different instances of
-`ExtraAccountMetas` into one account, using different `TlvDiscriminator`s.
+This can be confusing. Typically, a type implements `SplDiscriminate`, so that
+the type can be written into TLV data. In this case, `ExtraAccountMetaList` is
+generic over `SplDiscriminate`, meaning that a program can write many different instances of
+`ExtraAccountMetaList` into one account, using different `ArrayDiscriminator`s.
 
 Also, it's reusing an instruction discriminator as a TLV discriminator. For example,
 if the `transfer` instruction has a discriminator of `[1, 2, 3, 4, 5, 6, 7, 8]`,

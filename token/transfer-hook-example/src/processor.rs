@@ -1,7 +1,6 @@
 //! Program state processor
 
 use {
-    crate::inline_spl_token,
     solana_program::{
         account_info::{next_account_info, AccountInfo},
         entrypoint::ProgramResult,
@@ -11,29 +10,49 @@ use {
         pubkey::Pubkey,
         system_instruction,
     },
-    spl_tlv_account_resolution::state::ExtraAccountMetas,
+    spl_tlv_account_resolution::{account::ExtraAccountMeta, state::ExtraAccountMetaList},
+    spl_token_2022::{
+        extension::{
+            transfer_hook::TransferHookAccount, BaseStateWithExtensions, StateWithExtensions,
+        },
+        state::{Account, Mint},
+    },
     spl_transfer_hook_interface::{
         collect_extra_account_metas_signer_seeds,
         error::TransferHookError,
         get_extra_account_metas_address, get_extra_account_metas_address_and_bump_seed,
         instruction::{ExecuteInstruction, TransferHookInstruction},
     },
-    spl_type_length_value::state::TlvStateBorrowed,
 };
+
+fn check_token_account_is_transferring(account_info: &AccountInfo) -> Result<(), ProgramError> {
+    let account_data = account_info.try_borrow_data()?;
+    let token_account = StateWithExtensions::<Account>::unpack(&account_data)?;
+    let extension = token_account.get_extension::<TransferHookAccount>()?;
+    if bool::from(extension.transferring) {
+        Ok(())
+    } else {
+        Err(TransferHookError::ProgramCalledOutsideOfTransfer.into())
+    }
+}
 
 /// Processes an [Execute](enum.TransferHookInstruction.html) instruction.
 pub fn process_execute(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    _amount: u64,
+    amount: u64,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
 
-    let _source_account_info = next_account_info(account_info_iter)?;
+    let source_account_info = next_account_info(account_info_iter)?;
     let mint_info = next_account_info(account_info_iter)?;
-    let _destination_account_info = next_account_info(account_info_iter)?;
+    let destination_account_info = next_account_info(account_info_iter)?;
     let _authority_info = next_account_info(account_info_iter)?;
     let extra_account_metas_info = next_account_info(account_info_iter)?;
+
+    // Check that the accounts are properly in "transferring" mode
+    check_token_account_is_transferring(source_account_info)?;
+    check_token_account_is_transferring(destination_account_info)?;
 
     // For the example program, we just check that the correct pda and validation
     // pubkeys are provided
@@ -43,31 +62,22 @@ pub fn process_execute(
     }
 
     let data = extra_account_metas_info.try_borrow_data()?;
-    let state = TlvStateBorrowed::unpack(&data).unwrap();
-    let extra_account_metas =
-        ExtraAccountMetas::unpack_with_tlv_state::<ExecuteInstruction>(&state)?;
 
-    // if incorrect number of are provided, error
-    let extra_account_infos = account_info_iter.as_slice();
-    let account_metas = extra_account_metas.data();
-    if extra_account_infos.len() != account_metas.len() {
-        return Err(TransferHookError::IncorrectAccount.into());
-    }
-
-    // Let's assume that they're provided in the correct order
-    for (i, account_info) in extra_account_infos.iter().enumerate() {
-        if &account_metas[i] != account_info {
-            return Err(TransferHookError::IncorrectAccount.into());
-        }
-    }
+    ExtraAccountMetaList::check_account_infos::<ExecuteInstruction>(
+        accounts,
+        &TransferHookInstruction::Execute { amount }.pack(),
+        program_id,
+        &data,
+    )?;
 
     Ok(())
 }
 
-/// Processes a [InitializeExtraAccountMetas](enum.TransferHookInstruction.html) instruction.
-pub fn process_initialize_extra_account_metas(
+/// Processes a [InitializeExtraAccountMetaList](enum.TransferHookInstruction.html) instruction.
+pub fn process_initialize_extra_account_meta_list(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
+    extra_account_metas: &[ExtraAccountMeta],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
 
@@ -77,8 +87,12 @@ pub fn process_initialize_extra_account_metas(
     let _system_program_info = next_account_info(account_info_iter)?;
 
     // check that the mint authority is valid without fully deserializing
-    let mint_authority = inline_spl_token::get_mint_authority(&mint_info.try_borrow_data()?)?;
-    let mint_authority = mint_authority.ok_or(TransferHookError::MintHasNoMintAuthority)?;
+    let mint_data = mint_info.try_borrow_data()?;
+    let mint = StateWithExtensions::<Mint>::unpack(&mint_data)?;
+    let mint_authority = mint
+        .base
+        .mint_authority
+        .ok_or(TransferHookError::MintHasNoMintAuthority)?;
 
     // Check signers
     if !authority_info.is_signer {
@@ -98,9 +112,8 @@ pub fn process_initialize_extra_account_metas(
     // Create the account
     let bump_seed = [bump_seed];
     let signer_seeds = collect_extra_account_metas_signer_seeds(mint_info.key, &bump_seed);
-    let extra_account_infos = account_info_iter.as_slice();
-    let length = extra_account_infos.len();
-    let account_size = ExtraAccountMetas::size_of(length)?;
+    let length = extra_account_metas.len();
+    let account_size = ExtraAccountMetaList::size_of(length)?;
     invoke_signed(
         &system_instruction::allocate(extra_account_metas_info.key, account_size as u64),
         &[extra_account_metas_info.clone()],
@@ -114,10 +127,7 @@ pub fn process_initialize_extra_account_metas(
 
     // Write the data
     let mut data = extra_account_metas_info.try_borrow_mut_data()?;
-    ExtraAccountMetas::init_with_account_infos::<ExecuteInstruction>(
-        &mut data,
-        extra_account_infos,
-    )?;
+    ExtraAccountMetaList::init::<ExecuteInstruction>(&mut data, extra_account_metas)?;
 
     Ok(())
 }
@@ -131,9 +141,11 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], input: &[u8]) -> P
             msg!("Instruction: Execute");
             process_execute(program_id, accounts, amount)
         }
-        TransferHookInstruction::InitializeExtraAccountMetas => {
-            msg!("Instruction: InitializeExtraAccountMetas");
-            process_initialize_extra_account_metas(program_id, accounts)
+        TransferHookInstruction::InitializeExtraAccountMetaList {
+            extra_account_metas,
+        } => {
+            msg!("Instruction: InitializeExtraAccountMetaList");
+            process_initialize_extra_account_meta_list(program_id, accounts, &extra_account_metas)
         }
     }
 }

@@ -7,7 +7,9 @@ use {
         pubkey::Pubkey,
         system_program,
     },
-    spl_type_length_value::discriminator::{Discriminator, TlvDiscriminator},
+    spl_discriminator::{ArrayDiscriminator, SplDiscriminate},
+    spl_pod::{bytemuck::pod_slice_to_bytes, slice::PodSlice},
+    spl_tlv_account_resolution::account::ExtraAccountMeta,
     std::convert::TryInto,
 };
 
@@ -39,34 +41,34 @@ pub enum TransferHookInstruction {
     ///   1. `[]` Mint
     ///   2. `[s]` Mint authority
     ///   3. `[]` System program
-    ///   4..4+M `[]` `M` additional accounts, to be written to validation data
     ///
-    InitializeExtraAccountMetas,
+    InitializeExtraAccountMetaList {
+        /// List of `ExtraAccountMeta`s to write into the account
+        extra_account_metas: Vec<ExtraAccountMeta>,
+    },
 }
 /// TLV instruction type only used to define the discriminator. The actual data
-/// is entirely managed by `ExtraAccountMetas`, and it is the only data contained
+/// is entirely managed by `ExtraAccountMetaList`, and it is the only data contained
 /// by this type.
+#[derive(SplDiscriminate)]
+#[discriminator_hash_input("spl-transfer-hook-interface:execute")]
 pub struct ExecuteInstruction;
-impl TlvDiscriminator for ExecuteInstruction {
-    /// Please use this discriminator in your program when matching
-    const TLV_DISCRIMINATOR: Discriminator = Discriminator::new(EXECUTE_DISCRIMINATOR);
-}
-/// First 8 bytes of `hash::hashv(&["spl-transfer-hook-interface:execute"])`
-const EXECUTE_DISCRIMINATOR: [u8; Discriminator::LENGTH] = [105, 37, 101, 197, 75, 251, 102, 26];
-// annoying, but needed to perform a match on the value
-const EXECUTE_DISCRIMINATOR_SLICE: &[u8] = &EXECUTE_DISCRIMINATOR;
-/// First 8 bytes of `hash::hashv(&["spl-transfer-hook-interface:initialize-extra-account-metas"])`
-const INITIALIZE_EXTRA_ACCOUNT_METAS_DISCRIMINATOR: &[u8] = &[43, 34, 13, 49, 167, 88, 235, 235];
+
+/// TLV instruction type used to initialize extra account metas
+/// for the transfer hook
+#[derive(SplDiscriminate)]
+#[discriminator_hash_input("spl-transfer-hook-interface:initialize-extra-account-metas")]
+pub struct InitializeExtraAccountMetaListInstruction;
 
 impl TransferHookInstruction {
     /// Unpacks a byte buffer into a [TransferHookInstruction](enum.TransferHookInstruction.html).
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
-        if input.len() < Discriminator::LENGTH {
+        if input.len() < ArrayDiscriminator::LENGTH {
             return Err(ProgramError::InvalidInstructionData);
         }
-        let (discriminator, rest) = input.split_at(Discriminator::LENGTH);
+        let (discriminator, rest) = input.split_at(ArrayDiscriminator::LENGTH);
         Ok(match discriminator {
-            EXECUTE_DISCRIMINATOR_SLICE => {
+            ExecuteInstruction::SPL_DISCRIMINATOR_SLICE => {
                 let amount = rest
                     .get(..8)
                     .and_then(|slice| slice.try_into().ok())
@@ -74,7 +76,13 @@ impl TransferHookInstruction {
                     .ok_or(ProgramError::InvalidInstructionData)?;
                 Self::Execute { amount }
             }
-            INITIALIZE_EXTRA_ACCOUNT_METAS_DISCRIMINATOR => Self::InitializeExtraAccountMetas,
+            InitializeExtraAccountMetaListInstruction::SPL_DISCRIMINATOR_SLICE => {
+                let pod_slice = PodSlice::<ExtraAccountMeta>::unpack(rest)?;
+                let extra_account_metas = pod_slice.data().to_vec();
+                Self::InitializeExtraAccountMetaList {
+                    extra_account_metas,
+                }
+            }
             _ => return Err(ProgramError::InvalidInstructionData),
         })
     }
@@ -84,11 +92,17 @@ impl TransferHookInstruction {
         let mut buf = vec![];
         match self {
             Self::Execute { amount } => {
-                buf.extend_from_slice(EXECUTE_DISCRIMINATOR_SLICE);
+                buf.extend_from_slice(ExecuteInstruction::SPL_DISCRIMINATOR_SLICE);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::InitializeExtraAccountMetas => {
-                buf.extend_from_slice(INITIALIZE_EXTRA_ACCOUNT_METAS_DISCRIMINATOR);
+            Self::InitializeExtraAccountMetaList {
+                extra_account_metas,
+            } => {
+                buf.extend_from_slice(
+                    InitializeExtraAccountMetaListInstruction::SPL_DISCRIMINATOR_SLICE,
+                );
+                buf.extend_from_slice(&(extra_account_metas.len() as u32).to_le_bytes());
+                buf.extend_from_slice(pod_slice_to_bytes(extra_account_metas));
             }
         };
         buf
@@ -147,23 +161,25 @@ pub fn execute(
     }
 }
 
-/// Creates a `InitializeExtraAccountMetas` instruction.
-pub fn initialize_extra_account_metas(
+/// Creates a `InitializeExtraAccountMetaList` instruction.
+pub fn initialize_extra_account_meta_list(
     program_id: &Pubkey,
     extra_account_metas_pubkey: &Pubkey,
     mint_pubkey: &Pubkey,
     authority_pubkey: &Pubkey,
-    additional_accounts: &[AccountMeta],
+    extra_account_metas: &[ExtraAccountMeta],
 ) -> Instruction {
-    let data = TransferHookInstruction::InitializeExtraAccountMetas.pack();
+    let data = TransferHookInstruction::InitializeExtraAccountMetaList {
+        extra_account_metas: extra_account_metas.to_vec(),
+    }
+    .pack();
 
-    let mut accounts = vec![
+    let accounts = vec![
         AccountMeta::new(*extra_account_metas_pubkey, false),
         AccountMeta::new_readonly(*mint_pubkey, false),
         AccountMeta::new_readonly(*authority_pubkey, true),
         AccountMeta::new_readonly(system_program::id(), false),
     ];
-    accounts.extend_from_slice(additional_accounts);
 
     Instruction {
         program_id: *program_id,
@@ -174,17 +190,17 @@ pub fn initialize_extra_account_metas(
 
 #[cfg(test)]
 mod test {
-    use {super::*, crate::NAMESPACE, solana_program::hash};
+    use {super::*, crate::NAMESPACE, solana_program::hash, spl_pod::bytemuck::pod_from_bytes};
 
     #[test]
     fn validate_packing() {
         let amount = 111_111_111;
         let check = TransferHookInstruction::Execute { amount };
         let packed = check.pack();
-        // Please use ExecuteInstruction::TLV_DISCRIMINATOR in your program, the
+        // Please use ExecuteInstruction::SPL_DISCRIMINATOR in your program, the
         // following is just for test purposes
         let preimage = hash::hashv(&[format!("{NAMESPACE}:execute").as_bytes()]);
-        let discriminator = &preimage.as_ref()[..Discriminator::LENGTH];
+        let discriminator = &preimage.as_ref()[..ArrayDiscriminator::LENGTH];
         let mut expect = vec![];
         expect.extend_from_slice(discriminator.as_ref());
         expect.extend_from_slice(&amount.to_le_bytes());
@@ -195,15 +211,31 @@ mod test {
 
     #[test]
     fn initialize_validation_pubkeys_packing() {
-        let check = TransferHookInstruction::InitializeExtraAccountMetas;
+        let extra_meta_len_bytes = &[
+            1, 0, 0, 0, // `1u32`
+        ];
+        let extra_meta_bytes = &[
+            0, // `AccountMeta`
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, // pubkey
+            0, // is_signer
+            0, // is_writable
+        ];
+        let extra_account_metas =
+            vec![*pod_from_bytes::<ExtraAccountMeta>(extra_meta_bytes).unwrap()];
+        let check = TransferHookInstruction::InitializeExtraAccountMetaList {
+            extra_account_metas,
+        };
         let packed = check.pack();
         // Please use INITIALIZE_EXTRA_ACCOUNT_METAS_DISCRIMINATOR in your program,
         // the following is just for test purposes
         let preimage =
             hash::hashv(&[format!("{NAMESPACE}:initialize-extra-account-metas").as_bytes()]);
-        let discriminator = &preimage.as_ref()[..Discriminator::LENGTH];
+        let discriminator = &preimage.as_ref()[..ArrayDiscriminator::LENGTH];
         let mut expect = vec![];
         expect.extend_from_slice(discriminator.as_ref());
+        expect.extend_from_slice(extra_meta_len_bytes);
+        expect.extend_from_slice(extra_meta_bytes);
         assert_eq!(packed, expect);
         let unpacked = TransferHookInstruction::unpack(&expect).unwrap();
         assert_eq!(unpacked, check);

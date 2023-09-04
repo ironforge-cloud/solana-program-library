@@ -15,5 +15,15 @@ cargo_audit_ignores=(
   # Exception is a stopgap to unblock CI
   # https://github.com/solana-labs/solana/issues/29586
   --ignore RUSTSEC-2023-0001
+
+  # ed25519-dalek: Double Public Key Signing Function Oracle Attack
+  #
+  # Remove once SPL upgrades to Solana v1.17 or greater
+  --ignore RUSTSEC-2022-0093
+
+  # webpki: CPU denial of service in certificate path building
+  #
+  # No fixed upgrade is available! Only fix is switching to rustls-webpki
+  --ignore RUSTSEC-2023-0052
 )
 cargo +"$rust_stable" audit "${cargo_audit_ignores[@]}"

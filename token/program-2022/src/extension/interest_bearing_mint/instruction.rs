@@ -3,7 +3,6 @@ use {
         check_program_account,
         extension::interest_bearing_mint::BasisPoints,
         instruction::{encode_instruction, TokenInstruction},
-        pod::OptionalNonZeroPubkey,
     },
     bytemuck::{Pod, Zeroable},
     num_enum::{IntoPrimitive, TryFromPrimitive},
@@ -12,10 +11,16 @@ use {
         program_error::ProgramError,
         pubkey::Pubkey,
     },
+    spl_pod::optional_keys::OptionalNonZeroPubkey,
     std::convert::TryInto,
 };
 
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
+
 /// Interesting-bearing mint extension instructions
+#[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 pub enum InterestBearingMintInstruction {
@@ -57,6 +62,8 @@ pub enum InterestBearingMintInstruction {
 }
 
 /// Data expected by `InterestBearing::Initialize`
+#[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct InitializeInstructionData {

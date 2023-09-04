@@ -31,7 +31,7 @@ async fn setup(
     let mut context = program_test().start_with_context().await;
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
     let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
-    let mut slot = first_normal_slot;
+    let mut slot = first_normal_slot + 1;
     context.warp_to_slot(slot).unwrap();
 
     let reserve_stake_amount = TEST_STAKE_AMOUNT * 2 * num_validators as u64;
@@ -611,11 +611,11 @@ async fn merge_transient_stake_after_remove() {
         StakeStatus::DeactivatingAll
     );
     assert_eq!(
-        validator_list.validators[0].active_stake_lamports,
+        u64::from(validator_list.validators[0].active_stake_lamports),
         stake_rent + current_minimum_delegation
     );
     assert_eq!(
-        validator_list.validators[0].transient_stake_lamports,
+        u64::from(validator_list.validators[0].transient_stake_lamports),
         deactivated_lamports
     );
 

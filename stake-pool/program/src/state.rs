@@ -18,6 +18,7 @@ use {
         pubkey::{Pubkey, PUBKEY_BYTES},
         stake::state::Lockup,
     },
+    spl_pod::primitives::{PodU32, PodU64},
     spl_token_2022::{
         extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensions},
         state::{Account, AccountState, Mint},
@@ -26,20 +27,15 @@ use {
 };
 
 /// Enum representing the account type managed by the program
-#[derive(Clone, Debug, PartialEq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(Clone, Debug, Default, PartialEq, BorshDeserialize, BorshSerialize, BorshSchema)]
 pub enum AccountType {
     /// If the account has not been initialized, the enum will be 0
+    #[default]
     Uninitialized,
     /// Stake pool
     StakePool,
     /// Validator stake list
     ValidatorList,
-}
-
-impl Default for AccountType {
-    fn default() -> Self {
-        AccountType::Uninitialized
-    }
 }
 
 /// Initialized program details.
@@ -497,12 +493,14 @@ impl StakePool {
 
 /// Checks if the given extension is supported for the stake pool mint
 pub fn is_extension_supported_for_mint(extension_type: &ExtensionType) -> bool {
-    const SUPPORTED_EXTENSIONS: [ExtensionType; 5] = [
+    const SUPPORTED_EXTENSIONS: [ExtensionType; 7] = [
         ExtensionType::Uninitialized,
         ExtensionType::TransferFeeConfig,
         ExtensionType::ConfidentialTransferMint,
         ExtensionType::DefaultAccountState, // ok, but a freeze authority is not
         ExtensionType::InterestBearingConfig,
+        ExtensionType::MetadataPointer,
+        ExtensionType::TokenMetadata,
     ];
     if !SUPPORTED_EXTENSIONS.contains(extension_type) {
         msg!(
@@ -628,25 +626,25 @@ pub struct ValidatorStakeInfo {
     ///
     /// Note that if `last_update_epoch` does not match the current epoch then
     /// this field may not be accurate
-    pub active_stake_lamports: u64,
+    pub active_stake_lamports: PodU64,
 
     /// Amount of transient stake delegated to this validator
     ///
     /// Note that if `last_update_epoch` does not match the current epoch then
     /// this field may not be accurate
-    pub transient_stake_lamports: u64,
+    pub transient_stake_lamports: PodU64,
 
     /// Last epoch the active and transient stake lamports fields were updated
-    pub last_update_epoch: u64,
+    pub last_update_epoch: PodU64,
 
     /// Transient account seed suffix, used to derive the transient stake account address
-    pub transient_seed_suffix: u64,
+    pub transient_seed_suffix: PodU64,
 
     /// Unused space, initially meant to specify the end of seed suffixes
-    pub unused: u32,
+    pub unused: PodU32,
 
     /// Validator account seed suffix
-    pub validator_seed_suffix: u32, // really `Option<NonZeroU32>` so 0 is `None`
+    pub validator_seed_suffix: PodU32, // really `Option<NonZeroU32>` so 0 is `None`
 
     /// Status of the validator stake account
     pub status: StakeStatus,
@@ -658,8 +656,8 @@ pub struct ValidatorStakeInfo {
 impl ValidatorStakeInfo {
     /// Get the total lamports on this validator (active and transient)
     pub fn stake_lamports(&self) -> Result<u64, StakePoolError> {
-        self.active_stake_lamports
-            .checked_add(self.transient_stake_lamports)
+        u64::from(self.active_stake_lamports)
+            .checked_add(self.transient_stake_lamports.into())
             .ok_or(StakePoolError::CalculationFailure)
     }
 
@@ -751,7 +749,9 @@ impl ValidatorList {
 
     /// Check if the list has any active stake
     pub fn has_active_stake(&self) -> bool {
-        self.validators.iter().any(|x| x.active_stake_lamports > 0)
+        self.validators
+            .iter()
+            .any(|x| u64::from(x.active_stake_lamports) > 0)
     }
 }
 
@@ -1005,32 +1005,32 @@ mod test {
                 ValidatorStakeInfo {
                     status: StakeStatus::Active,
                     vote_account_address: Pubkey::new_from_array([1; 32]),
-                    active_stake_lamports: u64::from_le_bytes([255; 8]),
-                    transient_stake_lamports: u64::from_le_bytes([128; 8]),
-                    last_update_epoch: u64::from_le_bytes([64; 8]),
-                    transient_seed_suffix: 0,
-                    unused: 0,
-                    validator_seed_suffix: 0,
+                    active_stake_lamports: u64::from_le_bytes([255; 8]).into(),
+                    transient_stake_lamports: u64::from_le_bytes([128; 8]).into(),
+                    last_update_epoch: u64::from_le_bytes([64; 8]).into(),
+                    transient_seed_suffix: 0.into(),
+                    unused: 0.into(),
+                    validator_seed_suffix: 0.into(),
                 },
                 ValidatorStakeInfo {
                     status: StakeStatus::DeactivatingTransient,
                     vote_account_address: Pubkey::new_from_array([2; 32]),
-                    active_stake_lamports: 998877665544,
-                    transient_stake_lamports: 222222222,
-                    last_update_epoch: 11223445566,
-                    transient_seed_suffix: 0,
-                    unused: 0,
-                    validator_seed_suffix: 0,
+                    active_stake_lamports: 998877665544.into(),
+                    transient_stake_lamports: 222222222.into(),
+                    last_update_epoch: 11223445566.into(),
+                    transient_seed_suffix: 0.into(),
+                    unused: 0.into(),
+                    validator_seed_suffix: 0.into(),
                 },
                 ValidatorStakeInfo {
                     status: StakeStatus::ReadyForRemoval,
                     vote_account_address: Pubkey::new_from_array([3; 32]),
-                    active_stake_lamports: 0,
-                    transient_stake_lamports: 0,
-                    last_update_epoch: 999999999999999,
-                    transient_seed_suffix: 0,
-                    unused: 0,
-                    validator_seed_suffix: 0,
+                    active_stake_lamports: 0.into(),
+                    transient_stake_lamports: 0.into(),
+                    last_update_epoch: 999999999999999.into(),
+                    transient_seed_suffix: 0.into(),
+                    unused: 0.into(),
+                    validator_seed_suffix: 0.into(),
                 },
             ],
         }
@@ -1042,8 +1042,8 @@ mod test {
         let size = get_instance_packed_len(&ValidatorList::new(max_validators)).unwrap();
         let stake_list = uninitialized_validator_list();
         let mut byte_vec = vec![0u8; size];
-        let mut bytes = byte_vec.as_mut_slice();
-        borsh::to_writer(&mut bytes, &stake_list).unwrap();
+        let bytes = byte_vec.as_mut_slice();
+        borsh::to_writer(bytes, &stake_list).unwrap();
         let stake_list_unpacked = try_from_slice_unchecked::<ValidatorList>(&byte_vec).unwrap();
         assert_eq!(stake_list_unpacked, stake_list);
 
@@ -1056,16 +1056,16 @@ mod test {
             validators: vec![],
         };
         let mut byte_vec = vec![0u8; size];
-        let mut bytes = byte_vec.as_mut_slice();
-        borsh::to_writer(&mut bytes, &stake_list).unwrap();
+        let bytes = byte_vec.as_mut_slice();
+        borsh::to_writer(bytes, &stake_list).unwrap();
         let stake_list_unpacked = try_from_slice_unchecked::<ValidatorList>(&byte_vec).unwrap();
         assert_eq!(stake_list_unpacked, stake_list);
 
         // With several accounts
         let stake_list = test_validator_list(max_validators);
         let mut byte_vec = vec![0u8; size];
-        let mut bytes = byte_vec.as_mut_slice();
-        borsh::to_writer(&mut bytes, &stake_list).unwrap();
+        let bytes = byte_vec.as_mut_slice();
+        borsh::to_writer(bytes, &stake_list).unwrap();
         let stake_list_unpacked = try_from_slice_unchecked::<ValidatorList>(&byte_vec).unwrap();
         assert_eq!(stake_list_unpacked, stake_list);
     }
@@ -1076,7 +1076,7 @@ mod test {
         let mut validator_list = test_validator_list(max_validators);
         assert!(validator_list.has_active_stake());
         for validator in validator_list.validators.iter_mut() {
-            validator.active_stake_lamports = 0;
+            validator.active_stake_lamports = 0.into();
         }
         assert!(!validator_list.has_active_stake());
     }

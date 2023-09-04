@@ -88,7 +88,7 @@ async fn setup(
     .await;
 
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
-    context.warp_to_slot(first_normal_slot).unwrap();
+    context.warp_to_slot(first_normal_slot + 1).unwrap();
     stake_pool_accounts
         .update_all(
             &mut context.banks_client,
@@ -249,7 +249,10 @@ async fn success(token_program_id: Pubkey) {
         validator_stake_account.lamports,
         post_validator_stake_item.stake_lamports().unwrap()
     );
-    assert_eq!(post_validator_stake_item.transient_stake_lamports, 0);
+    assert_eq!(
+        u64::from(post_validator_stake_item.transient_stake_lamports),
+        0
+    );
 
     // Check reserve
     let post_reserve_lamports = get_account(
@@ -443,7 +446,10 @@ async fn success_with_extra_stake_lamports() {
         validator_stake_account.lamports,
         post_validator_stake_item.stake_lamports().unwrap()
     );
-    assert_eq!(post_validator_stake_item.transient_stake_lamports, 0);
+    assert_eq!(
+        u64::from(post_validator_stake_item.transient_stake_lamports),
+        0
+    );
 
     // Check reserve
     let post_reserve_lamports = get_account(

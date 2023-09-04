@@ -2,7 +2,6 @@ use {
     crate::{
         check_program_account,
         instruction::{encode_instruction, TokenInstruction},
-        pod::OptionalNonZeroPubkey,
     },
     bytemuck::{Pod, Zeroable},
     num_enum::{IntoPrimitive, TryFromPrimitive},
@@ -11,10 +10,16 @@ use {
         program_error::ProgramError,
         pubkey::Pubkey,
     },
+    spl_pod::optional_keys::OptionalNonZeroPubkey,
     std::convert::TryInto,
 };
 
+#[cfg(feature = "serde-traits")]
+use serde::{Deserialize, Serialize};
+
 /// Transfer hook extension instructions
+#[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Debug, PartialEq, IntoPrimitive, TryFromPrimitive)]
 #[repr(u8)]
 pub enum TransferHookInstruction {
@@ -56,6 +61,8 @@ pub enum TransferHookInstruction {
 }
 
 /// Data expected by `Initialize`
+#[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct InitializeInstructionData {
@@ -66,6 +73,8 @@ pub struct InitializeInstructionData {
 }
 
 /// Data expected by `Update`
+#[cfg_attr(feature = "serde-traits", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde-traits", serde(rename_all = "camelCase"))]
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct UpdateInstructionData {

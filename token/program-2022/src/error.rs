@@ -193,6 +193,45 @@ pub enum TokenError {
     /// Account does not accept non-confidential transfers
     #[error("Non-confidential transfers disabled")]
     NonConfidentialTransfersDisabled,
+
+    // 50
+    /// An account can only be closed if the confidential withheld fee is zero
+    #[error("An account can only be closed if the confidential withheld fee is zero")]
+    ConfidentialTransferFeeAccountHasWithheldFee,
+    /// A mint or an account is initialized to an invalid combination of extensions
+    #[error("A mint or an account is initialized to an invalid combination of extensions")]
+    InvalidExtensionCombination,
+    /// Extension allocation with overwrite must use the same length
+    #[error("Extension allocation with overwrite must use the same length")]
+    InvalidLengthForAlloc,
+    /// Failed to decrypt a confidential transfer account
+    #[error("Failed to decrypt a confidential transfer account")]
+    AccountDecryption,
+    /// Failed to generate a zero-knowledge proof needed for a token instruction
+    #[error("Failed to generate proof")]
+    ProofGeneration,
+
+    // 55
+    /// An invalid proof instruction offset was provided
+    #[error("An invalid proof instruction offset was provided")]
+    InvalidProofInstructionOffset,
+    /// Harvest of withheld tokens to mint is disabled
+    #[error("Harvest of withheld tokens to mint is disabled")]
+    HarvestToMintDisabled,
+    /// Split proof context state accounts not supported for instruction
+    #[error("Split proof context state accounts not supported for instruction")]
+    SplitProofContextStateAccountsNotSupported,
+    /// Not enough proof context state accounts provided
+    #[error("Not enough proof context state accounts provided")]
+    NotEnoughProofContextStateAccounts,
+    /// Ciphertext is malformed
+    #[error("Ciphertext is malformed")]
+    MalformedCiphertext,
+
+    // 60
+    /// Ciphertext arithmetic failed
+    #[error("Ciphertext arithmetic failed")]
+    CiphertextArithmeticFailed,
 }
 impl From<TokenError> for ProgramError {
     fn from(e: TokenError) -> Self {
@@ -334,6 +373,39 @@ impl PrintProgramError for TokenError {
             }
             TokenError::NonConfidentialTransfersDisabled => {
                 msg!("Non-confidential transfers disabled")
+            }
+            TokenError::ConfidentialTransferFeeAccountHasWithheldFee => {
+                msg!("Account has non-zero confidential withheld fee")
+            }
+            TokenError::InvalidExtensionCombination => {
+                msg!("Mint or account is initialized to an invalid combination of extensions")
+            }
+            TokenError::InvalidLengthForAlloc => {
+                msg!("Extension allocation with overwrite must use the same length")
+            }
+            TokenError::AccountDecryption => {
+                msg!("Failed to decrypt a confidential transfer account")
+            }
+            TokenError::ProofGeneration => {
+                msg!("Failed to generate proof")
+            }
+            TokenError::InvalidProofInstructionOffset => {
+                msg!("An invalid proof instruction offset was provided")
+            }
+            TokenError::HarvestToMintDisabled => {
+                msg!("Harvest of withheld tokens to mint is disabled")
+            }
+            TokenError::SplitProofContextStateAccountsNotSupported => {
+                msg!("Split proof context state accounts not supported for instruction")
+            }
+            TokenError::NotEnoughProofContextStateAccounts => {
+                msg!("Not enough proof context state accounts provided")
+            }
+            TokenError::MalformedCiphertext => {
+                msg!("Ciphertext is malformed")
+            }
+            TokenError::CiphertextArithmeticFailed => {
+                msg!("Ciphertext arithmetic failed")
             }
         }
     }

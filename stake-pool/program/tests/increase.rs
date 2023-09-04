@@ -440,7 +440,7 @@ async fn twice(success: bool, use_additional_first_time: bool, use_additional_se
             .await;
         let entry = validator_list.find(&validator_stake.vote.pubkey()).unwrap();
         assert_eq!(
-            entry.transient_stake_lamports,
+            u64::from(entry.transient_stake_lamports),
             total_increase + stake_rent * 2
         );
     } else {
@@ -536,7 +536,7 @@ async fn fail_additional_with_decreasing() {
 
     // warp forward to activation
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
-    context.warp_to_slot(first_normal_slot).unwrap();
+    context.warp_to_slot(first_normal_slot + 1).unwrap();
     let last_blockhash = context
         .banks_client
         .get_new_latest_blockhash(&context.last_blockhash)

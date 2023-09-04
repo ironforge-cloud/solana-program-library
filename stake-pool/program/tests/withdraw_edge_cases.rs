@@ -11,7 +11,7 @@ use {
     },
     solana_program_test::*,
     solana_sdk::{signature::Signer, transaction::TransactionError},
-    spl_stake_pool::{error::StakePoolError, instruction, state, MINIMUM_RESERVE_LAMPORTS},
+    spl_stake_pool::{error::StakePoolError, instruction, state},
     test_case::test_case,
 };
 
@@ -43,10 +43,7 @@ async fn fail_remove_validator() {
 
     // warp forward to deactivation
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
-    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
-    context
-        .warp_to_slot(first_normal_slot + slots_per_epoch)
-        .unwrap();
+    context.warp_to_slot(first_normal_slot + 1).unwrap();
 
     // update to merge deactivated stake into reserve
     stake_pool_accounts
@@ -146,10 +143,7 @@ async fn success_remove_validator(multiple: u64) {
 
     // warp forward to deactivation
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
-    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
-    context
-        .warp_to_slot(first_normal_slot + slots_per_epoch)
-        .unwrap();
+    context.warp_to_slot(first_normal_slot + 1).unwrap();
 
     let last_blockhash = context
         .banks_client
@@ -211,7 +205,7 @@ async fn success_remove_validator(multiple: u64) {
         get_account(&mut context.banks_client, &user_stake_recipient.pubkey()).await;
     assert_eq!(
         user_stake_recipient_account.lamports,
-        remaining_lamports + stake_rent + 1
+        remaining_lamports + stake_rent
     );
 
     // Check that cleanup happens correctly
@@ -262,10 +256,7 @@ async fn fail_with_reserve() {
 
     // warp forward to deactivation
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
-    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
-    context
-        .warp_to_slot(first_normal_slot + slots_per_epoch)
-        .unwrap();
+    context.warp_to_slot(first_normal_slot + 1).unwrap();
 
     // update to merge deactivated stake into reserve
     stake_pool_accounts
@@ -335,10 +326,7 @@ async fn success_with_reserve() {
 
     // warp forward to deactivation
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
-    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
-    context
-        .warp_to_slot(first_normal_slot + slots_per_epoch)
-        .unwrap();
+    context.warp_to_slot(first_normal_slot + 1).unwrap();
 
     // update to merge deactivated stake into reserve
     stake_pool_accounts
@@ -410,7 +398,7 @@ async fn success_with_reserve() {
     let stake_state = deserialize::<stake::state::StakeState>(&reserve_stake_account.data).unwrap();
     let meta = stake_state.meta().unwrap();
     assert_eq!(
-        MINIMUM_RESERVE_LAMPORTS + meta.rent_exempt_reserve + withdrawal_fee + deposit_fee,
+        meta.rent_exempt_reserve + withdrawal_fee + deposit_fee,
         reserve_stake_account.lamports
     );
 
@@ -419,9 +407,7 @@ async fn success_with_reserve() {
         get_account(&mut context.banks_client, &user_stake_recipient.pubkey()).await;
     assert_eq!(
         user_stake_recipient_account.lamports,
-        MINIMUM_RESERVE_LAMPORTS + deposit_info.stake_lamports + stake_rent * 2
-            - withdrawal_fee
-            - deposit_fee
+        deposit_info.stake_lamports + stake_rent * 2 - withdrawal_fee - deposit_fee
     );
 }
 
@@ -834,10 +820,7 @@ async fn success_with_small_preferred_withdraw() {
 
     // warp forward to deactivation
     let first_normal_slot = context.genesis_config().epoch_schedule.first_normal_slot;
-    let slots_per_epoch = context.genesis_config().epoch_schedule.slots_per_epoch;
-    context
-        .warp_to_slot(first_normal_slot + slots_per_epoch)
-        .unwrap();
+    context.warp_to_slot(first_normal_slot + 1).unwrap();
 
     // update to merge deactivated stake into reserve
     stake_pool_accounts
