@@ -1,6 +1,7 @@
 //! RequiredSignatory account
 use crate::{error::GovernanceError, state::enums::GovernanceAccountType};
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use shank::ShankAccount;
 use solana_program::{
     account_info::AccountInfo, program_error::ProgramError, program_pack::IsInitialized,
     pubkey::Pubkey,
@@ -8,7 +9,7 @@ use solana_program::{
 use spl_governance_tools::account::{get_account_data, AccountMaxSize};
 
 /// Required signatory
-#[derive(Clone, Debug, PartialEq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(Clone, Debug, PartialEq, BorshDeserialize, BorshSerialize, BorshSchema, ShankAccount)]
 pub struct RequiredSignatory {
     /// Account type
     pub account_type: GovernanceAccountType,

@@ -1,6 +1,7 @@
 //! Proposal  Account
 
 use borsh::maybestd::io::Write;
+use shank::ShankAccount;
 use solana_program::account_info::next_account_info;
 use std::cmp::Ordering;
 use std::slice::Iter;
@@ -127,7 +128,9 @@ pub enum MultiChoiceType {
 }
 
 /// Governance Proposal
-#[derive(Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema, ShankAccount,
+)]
 pub struct ProposalV2 {
     /// Governance account type
     pub account_type: GovernanceAccountType,

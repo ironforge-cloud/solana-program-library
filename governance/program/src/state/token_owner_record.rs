@@ -14,6 +14,7 @@ use crate::{
     },
     PROGRAM_AUTHORITY_SEED,
 };
+use shank::ShankAccount;
 
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
 use solana_program::{
@@ -29,7 +30,9 @@ use crate::state::realm_config::RealmConfigAccount;
 
 /// Governance Token Owner Record
 /// Account PDA seeds: ['governance', realm, token_mint, token_owner ]
-#[derive(Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema, ShankAccount,
+)]
 pub struct TokenOwnerRecordV2 {
     /// Governance account type
     pub account_type: GovernanceAccountType,

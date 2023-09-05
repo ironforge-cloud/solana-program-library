@@ -1,6 +1,7 @@
 //! Proposal deposit account
 
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use shank::ShankAccount;
 use solana_program::{
     account_info::AccountInfo, program_error::ProgramError, program_pack::IsInitialized,
     pubkey::Pubkey,
@@ -11,7 +12,7 @@ use crate::{error::GovernanceError, state::enums::GovernanceAccountType};
 
 /// Proposal deposit account
 /// The account is used to limit spam of proposals
-#[derive(Clone, Debug, PartialEq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(Clone, Debug, PartialEq, BorshDeserialize, BorshSerialize, BorshSchema, ShankAccount)]
 pub struct ProposalDeposit {
     /// Governance account type
     pub account_type: GovernanceAccountType,

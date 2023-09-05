@@ -12,6 +12,7 @@ use crate::{
     tools::structs::Reserved119,
 };
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use shank::ShankAccount;
 use solana_program::{
     account_info::AccountInfo, program_error::ProgramError, program_pack::IsInitialized,
     pubkey::Pubkey, rent::Rent,
@@ -76,7 +77,9 @@ pub const DEFAULT_DEPOSIT_EXEMPT_PROPOSAL_COUNT: u8 = 10;
 pub const SECURITY_DEPOSIT_BASE_LAMPORTS: u64 = 100_000_000; // 0.1 SOL
 
 /// Governance Account
-#[derive(Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema, ShankAccount,
+)]
 pub struct GovernanceV2 {
     /// Account type. It can be Uninitialized, Governance, ProgramGovernance, TokenGovernance or MintGovernance
     pub account_type: GovernanceAccountType,

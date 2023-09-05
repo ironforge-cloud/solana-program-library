@@ -26,7 +26,9 @@ pub enum VoterWeightAction {
 
 /// VoterWeightRecord account
 /// The account is used as an api interface to provide voting power to the governance program from external addin contracts
-#[derive(Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema, ShankAccount,
+)]
 pub struct VoterWeightRecord {
     /// VoterWeightRecord discriminator sha256("account:VoterWeightRecord")[..8]
     /// Note: The discriminator size must match the addin implementing program discriminator size

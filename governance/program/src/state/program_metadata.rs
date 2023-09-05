@@ -8,9 +8,12 @@ use solana_program::{
 use spl_governance_tools::account::{get_account_data, AccountMaxSize};
 
 use crate::state::enums::GovernanceAccountType;
+use shank::ShankAccount;
 
 /// Program metadata account. It stores information about the particular SPL-Governance program instance
-#[derive(Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema, ShankAccount,
+)]
 pub struct ProgramMetadata {
     /// Governance account type
     pub account_type: GovernanceAccountType,

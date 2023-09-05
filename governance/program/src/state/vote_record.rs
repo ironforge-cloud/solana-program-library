@@ -3,6 +3,7 @@
 use borsh::maybestd::io::Write;
 
 use borsh::{BorshDeserialize, BorshSchema, BorshSerialize};
+use shank::ShankAccount;
 use solana_program::account_info::AccountInfo;
 
 use solana_program::program_error::ProgramError;
@@ -88,7 +89,9 @@ pub fn get_vote_kind(vote: &Vote) -> VoteKind {
 }
 
 /// Proposal VoteRecord
-#[derive(Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema)]
+#[derive(
+    Clone, Debug, PartialEq, Eq, BorshDeserialize, BorshSerialize, BorshSchema, ShankAccount,
+)]
 pub struct VoteRecordV2 {
     /// Governance account type
     pub account_type: GovernanceAccountType,
