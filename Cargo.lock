@@ -4695,11 +4695,29 @@ dependencies = [
 
 [[package]]
 name = "shank"
+version = "0.0.12"
+dependencies = [
+ "shank_macro 0.0.12",
+]
+
+[[package]]
+name = "shank"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bc647510fc0d94a936f7367a9e3e30edbefd410068747ce4d4084b19b5fdbab"
 dependencies = [
- "shank_macro",
+ "shank_macro 0.2.1",
+]
+
+[[package]]
+name = "shank_macro"
+version = "0.0.12"
+dependencies = [
+ "proc-macro2 1.0.63",
+ "quote 1.0.29",
+ "shank_macro_impl 0.0.12",
+ "shank_render 0.0.1",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -4710,8 +4728,19 @@ checksum = "aa9ec31d18dcca23f2270ccf69766a99156792da3aed050dc5713af0e778b4f2"
 dependencies = [
  "proc-macro2 1.0.63",
  "quote 1.0.29",
- "shank_macro_impl",
- "shank_render",
+ "shank_macro_impl 0.2.1",
+ "shank_render 0.2.1",
+ "syn 1.0.107",
+]
+
+[[package]]
+name = "shank_macro_impl"
+version = "0.0.12"
+dependencies = [
+ "anyhow",
+ "proc-macro2 1.0.63",
+ "quote 1.0.29",
+ "serde",
  "syn 1.0.107",
 ]
 
@@ -4730,13 +4759,22 @@ dependencies = [
 
 [[package]]
 name = "shank_render"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2 1.0.63",
+ "quote 1.0.29",
+ "shank_macro_impl 0.0.12",
+]
+
+[[package]]
+name = "shank_render"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e63f0b763c4c767dfb462a884d5f5b9b99fdd0a214c910d95792eb02a13b3d69"
 dependencies = [
  "proc-macro2 1.0.63",
  "quote 1.0.29",
- "shank_macro_impl",
+ "shank_macro_impl 0.2.1",
 ]
 
 [[package]]
@@ -6583,6 +6621,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_derive",
+ "shank 0.0.12",
  "solana-program",
  "solana-program-test",
  "solana-sdk",
@@ -6701,7 +6740,7 @@ name = "spl-managed-token"
 version = "0.1.0"
 dependencies = [
  "borsh 0.10.3",
- "shank",
+ "shank 0.2.1",
  "solana-program",
  "solana-program-test",
  "solana-sdk",
