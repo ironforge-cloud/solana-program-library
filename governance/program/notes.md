@@ -4,6 +4,18 @@
 - [`GTesTBiEWE32WHXXE2S4XbZvA5CrEc4xs6ZgRe895dP`](https://explorer.solana.com/address/GTesTBiEWE32WHXXE2S4XbZvA5CrEc4xs6ZgRe895dP) test instance which can be used to setup test DAOs
 - [`GqTPL6qRf5aUuqscLh8Rg2HTxPUXfhhAXDptTLhp1t2J`](https://explorer.solana.com/address/GqTPL6qRf5aUuqscLh8Rg2HTxPUXfhhAXDptTLhp1t2J) Mango Governance Token
 
+## TL;DR
+
+It was determined that discriminating accounts based on size and pattern only will not work for
+this program. However the first byte of each account holds an `account_type` discriminator
+which maps to [this
+enum](https://docs.rs/spl-governance/3.1.1/spl_governance/state/enums/enum.GovernanceAccountType.html).
+We will thus provide a somewhat custom implementation that discriminates based on that first
+byte.
+
+Additionally [here is a JSON
+file](https://github.com/solana-labs/governance-ui/blob/329513508c777e90b3e17787379d85911cc3d60c/public/realms/mainnet-beta.json) that might help us find all deployed governance programs.
+
 ## Accounts
 
 ### GovernanceV2
@@ -70,15 +82,31 @@
 ## Sizes
 
 ```
-==   0                 NativeTreasury
-==  66                 RequiredSignatory
-==  88                 ProgramMetadata
-== 129                 ProposalDeposit
-== 282                 TokenOwnerRecordV2
-== 293                 RealmConfigAccount
+==   0    NativeTreasury
+==  66    RequiredSignatory
+==  88    ProgramMetadata
+== 129    ProposalDeposit
+== 282    TokenOwnerRecordV2
+== 293    RealmConfigAccount
 
->= 138                 VoteRecordV2
->= 264                 RealmV2
->= 316                 ProposalV2
-?? ???                 SignatoryRecordV2
+>= 138    VoteRecordV2
+>= 264    RealmV2
+>= 316    ProposalV2
+?? ???    SignatoryRecordV2
+```
+
+### Min Sizes Determined by Chainsaw from IDL fields
+
+```
+== 49     ProposalTransactionV2
+== 65     ProgramMetadata
+== 66     RequiredSignatory
+== 74     SignatoryRecordV2
+== 82     VoteRecordV2
+== 129    ProposalDeposit
+== 143    RealmConfigAccount
+== 169    RealmV2
+== 174    ProposalV2
+== 197    GovernanceV2
+== 249    TokenOwnerRecordV2
 ```
